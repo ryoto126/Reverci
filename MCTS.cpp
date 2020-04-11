@@ -30,6 +30,7 @@ const int PLAYOUT_COUNT = 1000;
 uint64_t firstHash, secondHash, playerHash;
 // 0->'.', 1->'B', 2->'W'
 uint64_t zobristHash[8][8][3];
+char disk[3] = {'B', 'W', '.'};
 unordered_map<uint64_t, pair<uint64_t, uint64_t>> hash2score;  // count,win
 void init() {
     firstHash = xor64();
@@ -41,9 +42,7 @@ void init() {
         zobristHash[i][j][k] = xor64();
         cout << i << " " << j << " " << k << " :" << zobristHash[i][j][k] << endl;
     }
-    ord['.'] = 0;
-    ord['B'] = 1;
-    ord['W'] = 2;
+    ord['B'] = 0, ord['W'] = 1, ord['.'] = 2;
 }
 
 // int ord(char player){
@@ -57,7 +56,7 @@ bool isInside(int x, int y) { return x >= 0 && x < BOARD_SIZE && y >= 0 && y < B
 void print(string S) { cout << S << endl; }
 struct Board {
     char board[BOARD_SIZE][BOARD_SIZE];
-    char player;
+    bool player;
     int last_x, last_y;
     uint64_t hash;
     vector<uint64_t> next_states;
@@ -69,16 +68,16 @@ struct Board {
         board[3][4] = 'B';
         board[4][3] = 'B';
         board[4][4] = 'W';
-        player = 'B';
+        player = 0;
         last_x = -1;
         last_y = -1;
         hash = 0;
         hash ^= firstHash;
         REP(i, BOARD_SIZE)
         REP(j, BOARD_SIZE) {
-            if (board[i][j] == '.') hash ^= zobristHash[i][j][0];
-            if (board[i][j] == 'B') hash ^= zobristHash[i][j][1];
-            if (board[i][j] == 'W') hash ^= zobristHash[i][j][2];
+            if (board[i][j] == 'B') hash ^= zobristHash[i][j][0];
+            if (board[i][j] == 'W') hash ^= zobristHash[i][j][1];
+            if (board[i][j] == '.') hash ^= zobristHash[i][j][2];
         }
     }
     void print() {
@@ -121,76 +120,30 @@ struct Board {
         REP(dir, 8) {
             int nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
-            if (board[nx][ny] != opponent(player)) continue;
+            if (board[nx][ny] != disk[!player]) continue;
             REP(k, BOARD_SIZE) {
                 nx += dx[dir], ny += dy[dir];
                 if (!isInside(nx, ny)) break;
                 if (board[nx][ny] == '.') break;  //空きマスでもアウト
-                if (board[nx][ny] == player) return true;
+                if (board[nx][ny] == disk[player]) return true;
             }
         }
         return false;
     }
     // player_が石をおけるか
-    bool canMove(char player_) {
-        REP(i, BOARD_SIZE)
-        REP(j, BOARD_SIZE) {
-            if (board[i][j] != '.') continue;
-            REP(dir, 8) {
-                int nx = i + dx[dir], ny = j + dy[dir];
-                if (!isInside(nx, ny)) continue;
-                if (board[nx][ny] != opponent(player_)) continue;
-                REP(k, BOARD_SIZE) {
-                    nx += dx[dir], ny += dy[dir];
-                    if (!isInside(nx, ny)) break;
-                    if (board[nx][ny] == '.') break;  //空きマスでもアウト
-                    if (board[nx][ny] == player_) return true;
-                }
-            }
+    bool canMove(bool player_) {
+        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+            if (canPut(i, j)) return true;
         }
         return false;
     }
     //終了状態か
-    bool isTerminal() { return !canMove('W') && !canMove('B'); }
-    //(i,j)に石を置いた後の盤面のハッシュ値を返す(実際には置かないので盤面を汚さないように注意)
-    uint64_t getHash(int i, int j) {
-        uint64_t ret = hash;
-        ret ^= zobristHash[i][j][0];
-        // board[i][j] = player;
-        ret ^= zobristHash[i][j][ord[player]];
-        REP(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
-            if (!isInside(nx, ny)) continue;
-            if (board[nx][ny] != opponent(player)) continue;
-            REP(k, BOARD_SIZE) {
-                nx += dx[dir], ny += dy[dir];
-                if (!isInside(nx, ny)) break;     //はみ出たらアウト
-                if (board[nx][ny] == '.') break;  //空きマスでもアウト
+    bool isTerminal() { return !canMove(0) && !canMove(1); }
 
-                // i,jからnx,nyまで全部ひっくり返す
-                if (board[nx][ny] == player) {
-                    int x = i + dx[dir], y = j + dy[dir];
-                    while (x != nx || y != ny) {
-                        ret ^= zobristHash[x][y][ord[board[x][y]]];
-                        // board[x][y] = player;  //ひっくり返す
-                        ret ^= zobristHash[x][y][ord[player]];
-                        x += dx[dir];
-                        y += dy[dir];
-                    }
-                    break;
-                }
-            }
-        }
-        // last_x = i;
-        // last_y = j;
-        ret ^= playerHash;
-        // player = opponent(player);
-        return ret;
-    }
     //現在の盤面のハッシュ値を返す
     uint64_t calcHash() {
         uint64_t ret = 0;
-        if (player == 'B')
+        if (player == 0)
             ret ^= firstHash;
         else
             ret ^= secondHash;
@@ -198,31 +151,32 @@ struct Board {
         return ret;
     }
     //(i,j)に石を置いて手番を渡す
+
     void put(int i, int j) {
         if (DEBUG) {
             cout << "put " << player << " on (" << i << "," << j << ")" << endl;
             // cout << board[i][j] << endl;
         }
-        hash ^= zobristHash[i][j][0];
-        board[i][j] = player;
+        hash ^= zobristHash[i][j][2];
+        board[i][j] = disk[player];
         // cout << "ord[" << player << "]:" << ord[player] << endl;
-        hash ^= zobristHash[i][j][ord[player]];
+        hash ^= zobristHash[i][j][player];
         REP(dir, 8) {
             int nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
-            if (board[nx][ny] != opponent(player)) continue;
+            if (board[nx][ny] != disk[!player]) continue;
             REP(k, BOARD_SIZE) {
                 nx += dx[dir], ny += dy[dir];
                 if (!isInside(nx, ny)) break;     //はみ出たらアウト
                 if (board[nx][ny] == '.') break;  //空きマスでもアウト
 
                 // i,jからnx,nyまで全部ひっくり返す
-                if (board[nx][ny] == player) {
+                if (board[nx][ny] == disk[player]) {
                     int x = i + dx[dir], y = j + dy[dir];
                     while (x != nx || y != ny) {
                         hash ^= zobristHash[x][y][ord[board[x][y]]];
-                        board[x][y] = player;  //ひっくり返す
-                        hash ^= zobristHash[x][y][ord[player]];
+                        board[x][y] = disk[player];  //ひっくり返す
+                        hash ^= zobristHash[x][y][player];
                         x += dx[dir];
                         y += dy[dir];
                     }
@@ -232,35 +186,16 @@ struct Board {
         }
         last_x = i;
         last_y = j;
-        player = opponent(player);
+        player = !player;
         hash ^= playerHash;
         // hash = calcHash();
     }
     void pass() {
-        player = opponent(player);
+        player = !player;
         hash ^= playerHash;
         // hash = calcHash();
     }
-    // uctで手を進める
-    void advance_uct() {
-        if (isTerminal()) return;
-        if (!canMove(player)) {
-            if (DEBUG) {
-                cout << "cannot move!!!!!" << endl;
-            }
-            player = opponent(player);
-            return;
-        }
-        vector<pii> cells;
-        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
-            if (canPut(i, j)) {
-            }
-        }
-        int c_nxt = cells.size();
-        assert(c_nxt > 0);
-        int idx = xor64() % c_nxt;
-        put(cells[idx].first, cells[idx].second);
-    }
+
     //ランダムに手番を進める
     void advance() {
         if (isTerminal()) return;
@@ -268,28 +203,15 @@ struct Board {
             if (DEBUG) {
                 cout << "cannot move!!!!!" << endl;
             }
-            player = opponent(player);
+            player = !player;
             hash ^= playerHash;
             return;
         }
         vector<pii> cells;
-        REP(i, BOARD_SIZE)
-        REP(j, BOARD_SIZE) {
+        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
             if (board[i][j] != '.') continue;
-            REP(dir, 8) {
-                int nx = i + dx[dir], ny = j + dy[dir];
-                if (!isInside(nx, ny)) continue;
-                if (board[nx][ny] != opponent(player)) continue;
-                REP(k, BOARD_SIZE) {
-                    nx += dx[dir], ny += dy[dir];
-                    if (!isInside(nx, ny)) break;
-                    if (board[nx][ny] == '.') break;  //空きマスでもアウト
-                    if (board[nx][ny] == player) {
-                        cells.push_back({i, j});
-                        dir = 8;
-                        break;
-                    }
-                }
+            if (canPut(i, j)) {
+                cells.push_back({i, j});
             }
         }
         int c_nxt = cells.size();
@@ -341,6 +263,10 @@ double uct_score(int win_count, int visited_count, int N, char player) {
 const int threshold_vis = 1000;
 //モンテカルロ木探索
 Board MCTS(Board b) {
+    if (!b.canMove(b.player)) {
+        b.pass();
+        return b;
+    }
     clock_t start_t = clock();
     //ハッシュ値→盤面
     unordered_map<uint64_t, Board> hash2board;
@@ -435,24 +361,23 @@ Board MCTS(Board b) {
 }
 Board Montecarlo(Board b) {
     if (!b.canMove(b.player)) {
-        b.player = opponent(b.player);
+        b.pass();
         b.print();
         return b;
     }
     //次の盤面から先手が勝つ確率
-    double exp = (b.player == 'B') ? -2 : 2;
+    double exp = (b.player == 0) ? -2 : 2;
 
     Board ret_b;
-    REP(i, BOARD_SIZE)
-    REP(j, BOARD_SIZE) {
+    REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
         if (!b.canPut(i, j)) continue;
         Board tmp_b = b;
         tmp_b.put(i, j);
         double res = playOut(tmp_b);
-        if (b.player == 'B' && res > exp) {
+        if (b.player == 0 && res > exp) {
             exp = res;
             ret_b = tmp_b;
-        } else if (b.player == 'W' && res < exp) {
+        } else if (b.player == 1 && res < exp) {
             exp = res;
             ret_b = tmp_b;
         }
@@ -478,33 +403,6 @@ double playOut(Board b) {
     return ret / (double)PLAYOUT_COUNT;
 }
 
-int move(Board b) {
-    //もし終了状態なら勝敗を返して終了
-    if (DEBUG) {
-        b.print();
-    }
-    // b.print();
-    if (b.isTerminal()) {
-        int res = b.countDisks();
-        if (DEBUG) {
-            if (res > 0)
-                print("First player won");
-            else if (res == 0)
-                print("Draw");
-            else
-                print("Second player won");
-        }
-        return res;
-    }
-    //もし進めないならパス
-    if (!b.canMove(b.player)) {
-        b.player = opponent(b.player);
-    }
-    Board next_b = Montecarlo(b);
-    return move(next_b);
-    // Board next_b = Montecarlo(b);
-}
-
 void first() {
     Board b;
     b.print();
@@ -522,13 +420,19 @@ void first() {
                 b.pass();
                 break;
             }
-            int x, y;
-            cout << "input:";
-            cin >> x >> y;
-            if (!b.canPut(x, y)) continue;
-            b.put(x, y);
-            b.print();
-            break;
+            cout << "input: ";
+            string S;
+            getline(cin, S);
+            if (S.size() == 3 && ('0' <= S[0] && S[0] <= '9') && ('0' <= S[2] && S[2] <= '9')) {
+                int x = S[0] - '0', y = S[2] - '0';
+                if (!b.canPut(x, y)) continue;
+                b.put(x, y);
+                b.print();
+                break;
+            } else {
+                cout << "invalid input" << endl;
+                continue;
+            }
         }
         b = MCTS(b);
     }
@@ -540,7 +444,7 @@ void second() {
             b.finish();
             return;
         }
-        b = Montecarlo(b);
+        b = MCTS(b);
         while (true) {
             if (b.isTerminal()) {
                 b.finish();
@@ -550,11 +454,18 @@ void second() {
                 b.pass();
                 break;
             }
-            int x, y;
             cout << "input:";
-            cin >> x >> y;
-            if (!b.canPut(x, y)) continue;
-            b.put(x, y);
+            string S;
+            getline(cin, S);
+            if (S.size() == 3 && ('0' <= S[0] && S[0] <= '9') && ('0' <= S[2] && S[2] <= '9')) {
+                int x = S[0] - '0', y = S[2] - '0';
+                if (!b.canPut(x, y)) continue;
+                b.put(x, y);
+                b.print();
+            } else {
+                cout << "invalid input" << endl;
+                continue;
+            }
             break;
         }
     }
@@ -570,7 +481,7 @@ void test() {
         if (!b.canMove(b.player))
             b.pass();
         else {
-            if (b.player == 'B')
+            if (b.player == 0)
                 b = MCTS(b);
             else
                 b = Montecarlo(b);
@@ -585,7 +496,7 @@ void test() {
                 b.pass();
                 break;
             }
-            if (b.player == 'B')
+            if (b.player == 0)
                 b = MCTS(b);
             else
                 b = Montecarlo(b);

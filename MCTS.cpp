@@ -487,6 +487,19 @@ struct Board {
         else
             return -1;
     }
+    int playout_greedy() {
+        Board tmp_b = *this;
+        while (!tmp_b.isTerminal()) {
+            tmp_b.advance_eval();
+        }
+        int res = tmp_b.countDisks();
+        if (res > 0)
+            return 1;
+        else if (res == 0)
+            return 0;
+        else
+            return -1;
+    }
     void finish() {
         int ret = countDisks();
         if (ret > 0) {
@@ -588,6 +601,104 @@ Board MCTS(Board b) {
         else {
             Board leaf_b = hash2board[pos_h];
             int res = leaf_b.playout();
+            t++;
+            update_cnt++;
+            // path.push_back(pos_h);
+            for (auto h : path) {
+                visited_count[h]++;
+                if (res == 1) win_count[h] += res;
+            }
+        }
+    }
+    int max_vis = 0;
+    uint_fast64_t next_h = 0;
+    for (auto h : G[root_h]) {
+        cout << "visited count:" << visited_count[h] << endl;
+        cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
+        if (visited_count[h] > max_vis) {
+            max_vis = visited_count[h];
+            next_h = h;
+        }
+    }
+    Board ret = hash2board[next_h];
+    cout << "number of updates:" << update_cnt << endl;
+    cout << "number of playouts" << t << endl;
+    if (PLAY) ret.print();
+    return ret;
+}
+
+Board MCTS_eval(Board b) {
+    if (!b.canMove(b.player)) {
+        b.pass();
+        return b;
+    }
+    clock_t start_t = clock();
+    //ハッシュ値→盤面
+    unordered_map<uint_fast64_t, Board> hash2board;
+    unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
+    unordered_map<uint_fast64_t, int> visited_count;
+    unordered_map<uint_fast64_t, int> win_count;  //勝ち:+1 負け:-1
+    // b.hash = b.calcHash();
+    uint_fast64_t root_h = b.hash;
+    hash2board[root_h] = b;
+    int t = 0;
+    int update_cnt = 0;
+    REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
+        if (b.canPut(i, j)) {
+            Board next_b = b;
+            next_b.put(i, j);
+            hash2board[next_b.hash] = next_b;
+            int res = next_b.playout_greedy();
+            t++;
+            update_cnt++;
+            G[root_h].push_back(next_b.hash);
+            visited_count[next_b.hash]++;
+            visited_count[root_h]++;
+            if (res == 1) win_count[next_b.hash] += res;
+        }
+    }
+    //制限時間までくりかえす
+
+    while (static_cast<double>(clock() - start_t) / CLOCKS_PER_SEC * 1000.0 < TIME_LIMIT) {
+        vector<uint_fast64_t> path;
+        uint_fast64_t pos_h = root_h;
+        path.push_back(pos_h);
+        while (true) {
+            int N = visited_count[root_h];
+            if (G[pos_h].size() == 0) break;
+            double max_score = -1e9;
+            uint_fast64_t argmax_h = 0;
+            for (auto next_h : G[pos_h]) {
+                double score = uct_score(win_count[next_h], visited_count[next_h], N, b.player);
+                if (score > max_score) {
+                    max_score = score;
+                    argmax_h = next_h;
+                }
+            }
+            path.push_back(argmax_h);
+            pos_h = argmax_h;
+        }
+        //葉ノードへの訪問回数が閾値を超えているならば、すべての遷移先(合法手)から一度ずつプレイアウトを行う
+        if (visited_count[pos_h] > threshold_vis) {
+            Board leaf_b = hash2board[pos_h];
+            REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
+                if (leaf_b.canPut(i, j)) {
+                    Board next_b = leaf_b;
+                    next_b.put(i, j);
+                    hash2board[next_b.hash] = next_b;
+                    int res = next_b.playout_greedy();
+                    t++;
+                    // t++;
+                    G[pos_h].push_back(next_b.hash);
+                    visited_count[next_b.hash]++;
+                    if (res == 1) win_count[next_b.hash] += res;
+                }
+            }
+        }
+        //そうでなければ、葉ノードから1回プレイアウトを行ってパス上のすべてのノードのスコアを更新する
+        else {
+            Board leaf_b = hash2board[pos_h];
+            int res = leaf_b.playout_greedy();
             t++;
             update_cnt++;
             // path.push_back(pos_h);
@@ -738,7 +849,7 @@ void second() {
 }
 void test() {
     Board b;
-    cout << "first:MCTS second:greedy" << endl;
+    cout << "first:MCTS second:MCTS with greedy" << endl;
     while (true) {
         if (b.isTerminal()) {
             b.finish();
@@ -750,7 +861,7 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = greedy(b);
+                b = MCTS_eval(b);
         }
 
         while (true) {
@@ -765,7 +876,7 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = greedy(b);
+                b = MCTS_eval(b);
             break;
         }
     }

@@ -4,6 +4,7 @@ using namespace std;
 #define FOR8(i, m, n) for (int_fast8_t i = (m); i < (n); i++)
 #define REP(i, n) for (int_fast16_t i = 0; i < (n); i++)
 #define FOR(i, m, n) for (int_fast16_t i = (m); i < (n); i++)
+#define isInside(x, y) ((x) >= 0 && (x) < 8 && (y) >= 0 && (y) < 8)
 using pii = pair<int, int>;
 
 const bool DEBUG = false;
@@ -25,10 +26,10 @@ uint_fast64_t xor64() {
 }
 
 // map<char, int> ord;
-uint_fast8_t ord[150];
+int_fast8_t ord[150];
 constexpr int dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
 constexpr int dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
-constexpr uint_fast8_t BOARD_SIZE = 8;
+constexpr int_fast8_t BOARD_SIZE = 8;
 constexpr uint_fast16_t PLAYOUT_COUNT = 1000;
 uint_fast64_t firstHash, secondHash, playerHash;
 // 0->'.', 1->'B', 2->'W'
@@ -55,18 +56,17 @@ void init() {
 // }
 
 char opponent(char player) { return (player == 'W') ? 'B' : 'W'; }
-bool isInside(int x, int y) { return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE; }
+// bool isInside(int x, int y) { return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE; }
 void print(string S) { cout << S << endl; }
 struct Board {
     char board[BOARD_SIZE][BOARD_SIZE];
     bool player;
-    int last_x, last_y;
+    int_fast8_t last_x, last_y;
     uint_fast64_t hash;
+    int_fast16_t id;
     vector<uint_fast64_t> next_states;
     Board() {
-        REP8(i, BOARD_SIZE)
-        REP8(j, BOARD_SIZE)
-        board[i][j] = '.';
+        REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) board[i][j] = '.';
         board[3][3] = 'W';
         board[3][4] = 'B';
         board[4][3] = 'B';
@@ -86,11 +86,11 @@ struct Board {
     void print() {
         cout << "  ";
         REP8(i, BOARD_SIZE)
-        cout << i << " ";
+        cout << (int)i << " ";
         cout << endl;
 
         REP8(i, BOARD_SIZE) {
-            cout << i << " ";
+            cout << (int)i << " ";
             REP8(j, BOARD_SIZE) {
                 bool is_last = false;
                 if (i == last_x && j == last_y) is_last = true;
@@ -106,8 +106,8 @@ struct Board {
         cout << endl;
     }
     //黒 - 白
-    int countDisks() {
-        int ret = 0;
+    int_fast8_t countDisks() {
+        int_fast8_t ret = 0;
         REP8(i, BOARD_SIZE)
         REP8(j, BOARD_SIZE) {
             if (board[i][j] == 'B')
@@ -118,10 +118,10 @@ struct Board {
         return ret;
     }
     //(i,j)に石をおけるか
-    bool canPut(int i, int j) {
+    bool canPut(int_fast8_t i, int_fast8_t j) {
         if (board[i][j] != '.') return false;
         REP8(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
+            int_fast8_t nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
             REP8(k, BOARD_SIZE) {
@@ -155,7 +155,7 @@ struct Board {
     }
     //(i,j)に石を置いて手番を渡す
 
-    void put(int i, int j) {
+    void put(int_fast8_t i, int_fast8_t j) {
         if (DEBUG) {
             cout << "put " << player << " on (" << i << "," << j << ")" << endl;
             // cout << board[i][j] << endl;
@@ -165,7 +165,7 @@ struct Board {
         // cout << "ord[" << player << "]:" << ord[player] << endl;
         hash ^= zobristHash[i][j][player];
         REP8(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
+            int_fast8_t nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
             REP8(k, BOARD_SIZE) {
@@ -175,7 +175,7 @@ struct Board {
 
                 // i,jからnx,nyまで全部ひっくり返す
                 if (board[nx][ny] == disk[player]) {
-                    int x = i + dx[dir], y = j + dy[dir];
+                    int_fast8_t x = i + dx[dir], y = j + dy[dir];
                     while (x != nx || y != ny) {
                         hash ^= zobristHash[x][y][ord[board[x][y]]];
                         board[x][y] = disk[player];  //ひっくり返す
@@ -217,18 +217,18 @@ struct Board {
                 cells.push_back({i, j});
             }
         }
-        int c_nxt = cells.size();
+        int_fast8_t c_nxt = cells.size();
         assert(c_nxt > 0);
-        int idx = xor64() % c_nxt;
+        int_fast8_t idx = xor64() % c_nxt;
         put(cells[idx].first, cells[idx].second);
     }
     //一回プレイアウト
-    int playout() {
+    int_fast8_t playout() {
         Board tmp_b = *this;
         while (!tmp_b.isTerminal()) {
             tmp_b.advance();
         }
-        int res = tmp_b.countDisks();
+        int_fast8_t res = tmp_b.countDisks();
         if (res > 0)
             return 1;
         else if (res == 0)
@@ -237,7 +237,7 @@ struct Board {
             return -1;
     }
     void finish() {
-        int ret = countDisks();
+        int_fast8_t ret = countDisks();
         if (ret > 0) {
             cout << "first player won" << endl;
         } else if (ret < 0) {
@@ -256,109 +256,185 @@ int move(Board b);
 void init();
 /*----------prototype declaration----------*/
 const double C = 1.41421;
-double uct_score(int win_count, int visited_count, int N, char player) {
+double uct_score(int_fast32_t win_count, int_fast32_t visited_count, int_fast32_t N, bool player) {
     assert(N > 0);
     double win_rate = (double)win_count / visited_count;
-    if (player == 'W') win_rate *= -1;
+    if (player == 1) win_rate *= -1;
     double bias = C * sqrt(log(N) / visited_count);
     return win_rate + bias;
 }
 const int threshold_vis = 1000;
 //モンテカルロ木探索
+Board id2board[10000];
+uint_fast64_t id2hash[10000];
+int_fast32_t visited_count[10000];
+int_fast32_t win_count[10000];
+vector<int_fast16_t> graph[10000];
 Board MCTS(Board b) {
     if (!b.canMove(b.player)) {
         b.pass();
         return b;
     }
     clock_t start_t = clock();
+    //ハッシュ値→id
+    unordered_map<uint_fast64_t, int_fast16_t> hash2id;
+    int_fast16_t mx_id = 0;
+    set<uint_fast64_t> used_hash;
+
     //ハッシュ値→盤面
-    unordered_map<uint_fast64_t, Board> hash2board;
-    unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
-    unordered_map<uint_fast64_t, int> visited_count;
-    unordered_map<uint_fast64_t, int> win_count;  //勝ち:+1 負け:-1
+    // unordered_map<uint_fast64_t, Board> hash2board;
+    // unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
+    // unordered_map<uint_fast64_t, int_fast32_t> visited_count;
+    // unordered_map<uint_fast64_t, int_fast32_t> win_count;  //勝ち:+1 負け:-1
     // b.hash = b.calcHash();
     uint_fast64_t root_h = b.hash;
-    hash2board[root_h] = b;
-    int t = 0;
-    int update_cnt = 0;
+    used_hash.insert(root_h);
+    visited_count[mx_id] = 0;
+    win_count[mx_id] = 0;
+    int_fast16_t root_id = mx_id++;
+    id2board[root_id] = b;
+    b.id = root_id;
+    // hash2board[root_h] = b;
+    int_fast32_t t = 0;
+    int_fast32_t update_cnt = 0;
+    graph[root_id].clear();
     REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
         if (b.canPut(i, j)) {
             Board next_b = b;
             next_b.put(i, j);
-            hash2board[next_b.hash] = next_b;
-            int res = next_b.playout();
+            if (!used_hash.count(next_b.hash)) {
+                used_hash.insert(next_b.hash);
+                visited_count[mx_id] = 0;
+                win_count[mx_id] = 0;
+                hash2id[b.hash] = mx_id;
+                next_b.id = mx_id;
+                mx_id++;
+            }
+            id2board[next_b.id] = next_b;
+            int_fast8_t res = next_b.playout();
             t++;
             update_cnt++;
-            G[root_h].push_back(next_b.hash);
-            visited_count[next_b.hash]++;
-            visited_count[root_h]++;
-            if (res == 1) win_count[next_b.hash] += res;
+            graph[root_id].push_back(next_b.id);
+            graph[next_b.id].clear();
+            // G[root_h].push_back(next_b.hash);
+            visited_count[next_b.id]++;
+            visited_count[root_id]++;
+            if (res == 1) win_count[next_b.id] += res;
         }
     }
     //制限時間までくりかえす
-
+    vector<int_fast16_t> path;
     while (static_cast<double>(clock() - start_t) / CLOCKS_PER_SEC * 1000.0 < TIME_LIMIT) {
-        vector<uint_fast64_t> path;
-        uint_fast64_t pos_h = root_h;
-        path.push_back(pos_h);
+        path.clear();
+        int_fast16_t pos_id = root_id;
+        path.push_back(pos_id);
         while (true) {
-            int N = visited_count[root_h];
-            if (G[pos_h].size() == 0) break;
+            int N = visited_count[root_id];
+            if (graph[pos_id].size() == 0) break;
             double max_score = -1e9;
-            uint_fast64_t argmax_h = 0;
-            for (auto next_h : G[pos_h]) {
-                double score = uct_score(win_count[next_h], visited_count[next_h], N, b.player);
+            int_fast16_t argmax_id = 0;
+            for (auto next_id : graph[pos_id]) {
+                double score = uct_score(win_count[next_id], visited_count[next_id], N, b.player);
                 if (score > max_score) {
                     max_score = score;
-                    argmax_h = next_h;
+                    argmax_id = next_id;
                 }
             }
-            path.push_back(argmax_h);
-            pos_h = argmax_h;
+            path.push_back(argmax_id);
+            pos_id = argmax_id;
         }
         //葉ノードへの訪問回数が閾値を超えているならば、すべての遷移先(合法手)から一度ずつプレイアウトを行う
-        if (visited_count[pos_h] > threshold_vis) {
-            Board leaf_b = hash2board[pos_h];
+        if (visited_count[pos_id] > threshold_vis) {
+            Board leaf_b = id2board[pos_id];
+            // if (leaf_b.isTerminal()) {
+            //     int_fast8_t res = leaf_b.countDisks();
+            //     t++;
+            //     update_cnt++;
+            //     for (auto id : path) {
+            //         visited_count[id]++;
+            //         if (res == 1) win_count[id] += res;
+            //     }
+            // } else {
+            bool done = false;
             REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
                 if (leaf_b.canPut(i, j)) {
+                    done = true;
                     Board next_b = leaf_b;
                     next_b.put(i, j);
-                    hash2board[next_b.hash] = next_b;
-                    int res = next_b.playout();
+                    if (!used_hash.count(next_b.hash)) {
+                        hash2id[next_b.hash] = mx_id;
+                        next_b.id = mx_id;
+                        mx_id++;
+                    } else {
+                        next_b.id = hash2id[next_b.hash];
+                    }
+                    id2board[next_b.id] = next_b;
+                    int_fast8_t res = next_b.playout();
                     t++;
                     // t++;
-                    G[pos_h].push_back(next_b.hash);
-                    visited_count[next_b.hash]++;
-                    if (res == 1) win_count[next_b.hash] += res;
+                    graph[pos_id].push_back(next_b.id);
+                    graph[next_b.id].clear();
+                    visited_count[next_b.id]++;
+                    if (res == 1) win_count[next_b.id] += res;
+                }
+                //}
+            }
+            if (!done) {
+                if (leaf_b.isTerminal()) {
+                    update_cnt++;
+                    int res = leaf_b.countDisks();
+                    for (auto id : path) {
+                        visited_count[id]++;
+                        if (res == 1) win_count[id] += res;
+                    }
+                } else {
+                    Board next_b = leaf_b;
+                    next_b.pass();
+                    if (!used_hash.count(next_b.hash)) {
+                        hash2id[next_b.hash] = mx_id;
+                        next_b.id = mx_id;
+                        mx_id++;
+                    } else {
+                        next_b.id = hash2id[next_b.hash];
+                    }
+                    id2board[next_b.id] = next_b;
+                    int_fast8_t res = next_b.playout();
+                    t++;
+                    // t++;
+                    graph[pos_id].push_back(next_b.id);
+                    graph[next_b.id].clear();
+                    visited_count[next_b.id]++;
+                    if (res == 1) win_count[next_b.id] += res;
                 }
             }
         }
         //そうでなければ、葉ノードから1回プレイアウトを行ってパス上のすべてのノードのスコアを更新する
         else {
-            Board leaf_b = hash2board[pos_h];
-            int res = leaf_b.playout();
+            Board leaf_b = id2board[pos_id];
+            int_fast8_t res = leaf_b.playout();
             t++;
             update_cnt++;
             // path.push_back(pos_h);
-            for (auto h : path) {
-                visited_count[h]++;
-                if (res == 1) win_count[h] += res;
+            for (auto id : path) {
+                visited_count[id]++;
+                if (res == 1) win_count[id] += res;
             }
         }
     }
-    int max_vis = 0;
-    uint_fast64_t next_h = 0;
-    for (auto h : G[root_h]) {
-        cout << "visited count:" << visited_count[h] << endl;
-        cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
-        if (visited_count[h] > max_vis) {
-            max_vis = visited_count[h];
-            next_h = h;
+    int_fast32_t max_vis = 0;
+    int_fast16_t next_id = 0;
+    for (auto id : graph[root_id]) {
+        cout << "visited count:" << visited_count[id] << endl;
+        cout << "winning rate:" << (double)win_count[id] / visited_count[id] << endl;
+        if (visited_count[id] > max_vis) {
+            max_vis = visited_count[id];
+            next_id = id;
         }
     }
-    Board ret = hash2board[next_h];
+    Board ret = id2board[next_id];
     cout << "number of updates:" << update_cnt << endl;
     cout << "number of playouts" << t << endl;
+    cout << "number of hashes " << mx_id << endl;
     if (PLAY) ret.print();
     return ret;
 }

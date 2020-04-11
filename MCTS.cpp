@@ -4,9 +4,10 @@ using namespace std;
 #define FOR8(i, m, n) for (int_fast8_t i = (m); i < (n); i++)
 #define REP(i, n) for (int_fast16_t i = 0; i < (n); i++)
 #define FOR(i, m, n) for (int_fast16_t i = (m); i < (n); i++)
+#define isInside(x, y) ((x) >= 0 && (x) < 8 && (y) >= 0 && (y) < 8)
 using pii = pair<int, int>;
 
-const bool DEBUG = false;
+const bool DEBUG = true;
 const bool PLAY = true;
 const double TIME_LIMIT = 3000;
 std::random_device rd;
@@ -23,11 +24,22 @@ uint_fast64_t xor64() {
     x = x ^ (x << 7);
     return x = x ^ (x >> 9);
 }
+double getrand01() { return (double)xor64() / ULLONG_MAX; }
 
 // map<char, int> ord;
 uint_fast8_t ord[150];
 constexpr int dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
 constexpr int dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+constexpr int_fast16_t BOARD_SCORE[8][8] = {
+    {100, -40, 20, 5, 5, 20, -40, 100},    //
+    {-40, -80, -1, -1, -1, -1, -80, -40},  //
+    {20, -1, 5, 1, 1, 5, -1, 20},          //
+    {5, -1, 1, 0, 0, 1, -1, 5},            //
+    {5, -1, 1, 0, 0, 1, -1, 5},            //
+    {20, -1, 5, 1, 1, 5, -1, 20},          //
+    {-40, -80, -1, -1, -1, -1, -80, -40},  //
+    {100, -40, 20, 5, 5, 20, -40, 100}     //
+};
 constexpr uint_fast8_t BOARD_SIZE = 8;
 constexpr uint_fast16_t PLAYOUT_COUNT = 1000;
 uint_fast64_t firstHash, secondHash, playerHash;
@@ -53,9 +65,9 @@ void init() {
 //     else if(player=='W')return 2;
 //     else return 0;
 // }
-
+const double CS = 1;
 char opponent(char player) { return (player == 'W') ? 'B' : 'W'; }
-bool isInside(int x, int y) { return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE; }
+// bool isInside(int x, int y) { return x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE; }
 void print(string S) { cout << S << endl; }
 struct Board {
     char board[BOARD_SIZE][BOARD_SIZE];
@@ -133,10 +145,26 @@ struct Board {
         }
         return false;
     }
+    // player_がそのマスに石をおけるか
+    bool canPut(int i, int j, bool player_) {
+        if (board[i][j] != '.') return false;
+        REP8(dir, 8) {
+            int nx = i + dx[dir], ny = j + dy[dir];
+            if (!isInside(nx, ny)) continue;
+            if (board[nx][ny] != disk[!player_]) continue;
+            REP8(k, BOARD_SIZE) {
+                nx += dx[dir], ny += dy[dir];
+                if (!isInside(nx, ny)) break;
+                if (board[nx][ny] == '.') break;  //空きマスでもアウト
+                if (board[nx][ny] == disk[player_]) return true;
+            }
+        }
+        return false;
+    }
     // player_が石をおけるか
     bool canMove(bool player_) {
         REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
-            if (canPut(i, j)) return true;
+            if (canPut(i, j, player_)) return true;
         }
         return false;
     }
@@ -156,10 +184,10 @@ struct Board {
     //(i,j)に石を置いて手番を渡す
 
     void put(int i, int j) {
-        if (DEBUG) {
-            cout << "put " << player << " on (" << i << "," << j << ")" << endl;
-            // cout << board[i][j] << endl;
-        }
+        // if (DEBUG) {
+        //     cout << "put " << player << " on (" << i << "," << j << ")" << endl;
+        //     // cout << board[i][j] << endl;
+        // }
         hash ^= zobristHash[i][j][2];
         board[i][j] = disk[player];
         // cout << "ord[" << player << "]:" << ord[player] << endl;
@@ -198,14 +226,206 @@ struct Board {
         hash ^= playerHash;
         // hash = calcHash();
     }
+    //黒の確定石の数-白の確定石
+    int_fast8_t calc_confirmed_stone() {
+        if (board[0][0] == '.' && board[0][7] == '.' && board[7][0] == '.' && board[7][7] == '.') return 0;
+        uint_fast8_t side[28] = {};
+        uint_fast8_t confirmed[28] = {};
+        REP8(i, 28) confirmed[i] = 2;
+        REP8(j, 8) {
+            if (board[0][j] == 'B')
+                side[j] = 0;
+            else if (board[0][j] == 'W')
+                side[j] = 1;
+            else
+                side[j] = 2;
 
+            if (board[7][j] == 'B')
+                side[21 - j] = 0;
+            else if (board[7][j] == 'W')
+                side[21 - j] = 1;
+            else
+                side[21 - j] = 2;
+        }
+        FOR(i, 1, 7) {
+            if (board[i][0] == 'B')
+                side[28 - i] = 0;
+            else if (board[i][0] == 'W')
+                side[28 - i] = 1;
+            else
+                side[28 - i] = 2;
+
+            if (board[i][7] == 'B')
+                side[7 + i] = 0;
+            else if (board[i][7] == 'W')
+                side[7 + i] = 1;
+            else
+                side[7 + i] = 2;
+        }
+        uint_fast8_t space[4] = {};
+        REP(i, 28) {
+            if (side[i] == 2) {
+                if (i <= 7) space[0] = true;
+                if (7 <= i && i <= 14) space[1] = true;
+                if (14 <= i && i <= 21) space[2] = true;
+                if ((21 <= i && i <= 27) || i == 0) space[3] = true;
+            }
+        }
+        //左上隅
+        if (side[0] == 0) {
+            uint_fast8_t pos = 0;
+            while (pos <= 7 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos++;
+            }
+            pos = 27;
+            while (pos >= 21 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos--;
+            }
+        } else if (side[0] == 1) {
+            uint_fast8_t pos = 0;
+            while (pos <= 7 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos++;
+            }
+            pos = 27;
+            while (pos >= 21 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos--;
+            }
+        }
+        //右上隅
+        if (side[7] == 0) {
+            uint_fast8_t pos = 7;
+            while (pos <= 14 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos++;
+            }
+            pos = 6;
+            while (pos > 0 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos--;
+            }
+        } else if (side[7] == 1) {
+            uint_fast8_t pos = 7;
+            while (pos <= 14 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos++;
+            }
+            pos = 6;
+            while (pos > 0 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos--;
+            }
+        }
+
+        //右下隅
+        if (side[14] == 0) {
+            uint8_t pos = 14;
+            while (pos > 7 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos--;
+            }
+            pos = 15;
+            while (pos < 21 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos++;
+            }
+        } else if (side[14] == 1) {
+            uint8_t pos = 14;
+            while (pos > 7 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos--;
+            }
+            pos = 15;
+            while (pos < 21 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos++;
+            }
+        }
+
+        //左下隅
+        if (side[21] == 0) {
+            uint8_t pos = 21;
+            while (pos < 28 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos++;
+            }
+            pos = 20;
+            while (pos > 14 && side[pos] == 0) {
+                confirmed[pos] = 0;
+                pos--;
+            }
+        } else if (side[21] == 1) {
+            uint8_t pos = 21;
+            while (pos < 28 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos++;
+            }
+            pos = 20;
+            while (pos > 14 && side[pos] == 1) {
+                confirmed[pos] = 1;
+                pos--;
+            }
+        }
+
+        //上辺
+        if (!space[0]) {
+            REP8(j, 8) { confirmed[j] = side[j]; }
+        }
+        if (!space[1]) {
+            FOR(i, 7, 14) { confirmed[i] = side[i]; }
+        }
+        if (!space[2]) {
+            FOR(i, 14, 21) confirmed[i] = side[i];
+        }
+        if (!space[3]) {
+            FOR(i, 21, 28) confirmed[i] = side[i];
+        }
+        int_fast8_t ret = 0;
+        REP(i, 28) {
+            if (confirmed[i] == 0)
+                ret++;
+            else if (confirmed[i] == 1)
+                ret--;
+        }
+        return ret;
+    }
+    //盤面の評価値
+    int_fast16_t board_score() {
+        int_fast16_t ret = 0;
+        REP8(i, 8) REP8(j, 8) {
+            if (board[i][j] == 'B')
+                ret += BOARD_SCORE[i][j];
+            else if (board[i][j] == 'W')
+                ret -= BOARD_SCORE[i][j];
+        }
+        return ret;
+    }
+    //開放度
+    int_fast8_t calc_openness() {
+        int_fast8_t ret = 0;
+        REP8(i, 8) REP8(j, 8) {
+            if (canPut(i, j, 0)) ret++;
+            if (canPut(i, j, 1)) ret--;
+        }
+        return ret;
+    }
+    //全体の評価値
+    double eval() {
+        // double ret = 0;
+        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 10 +
+               calc_openness() * getrand01() * 10;
+    }
     //ランダムに手番を進める
     void advance() {
         if (isTerminal()) return;
         if (!canMove(player)) {
-            if (DEBUG) {
-                cout << "cannot move!!!!!" << endl;
-            }
+            // if (DEBUG) {
+            //     print();
+            //     cout << disk[player] << " cannot move!!!!!" << endl;
+            // }
             player = !player;
             hash ^= playerHash;
             return;
@@ -221,6 +441,37 @@ struct Board {
         assert(c_nxt > 0);
         int idx = xor64() % c_nxt;
         put(cells[idx].first, cells[idx].second);
+    }
+    //評価値がもっとも高い手を選んで進める
+    void advance_eval() {
+        if (isTerminal()) return;
+        if (!canMove(player)) {
+            // if (DEBUG) {
+            //     print();
+            //     cout << disk[player] << " cannot move!!!!!" << endl;
+            // }
+            player = !player;
+            hash ^= playerHash;
+            return;
+        }
+        vector<pair<double, pii>> cells;
+
+        REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
+            if (board[i][j] != '.') continue;
+            if (canPut(i, j)) {
+                Board next_b = *this;
+                next_b.put(i, j);
+                double res = next_b.eval();
+                cells.push_back({res, {i, j}});
+            }
+        }
+        sort(cells.begin(), cells.end());
+        if (player == 1) {
+            put(cells[0].second.first, cells[0].second.second);
+        } else {
+            int n = cells.size();
+            put(cells[n - 1].second.first, cells[n - 1].second.second);
+        }
     }
     //一回プレイアウト
     int playout() {
@@ -388,6 +639,18 @@ Board Montecarlo(Board b) {
     if (PLAY) ret_b.print();
     return ret_b;
 }
+Board greedy(Board b) {
+    if (!b.canMove(b.player)) {
+        b.pass();
+        return b;
+    }
+    b.advance_eval();
+    if (PLAY) b.print();
+    if (DEBUG) {
+        cout << "confirmed stone:" << (int)b.calc_confirmed_stone() << endl;
+    }
+    return b;
+}
 
 //盤面bからはじめてランダムに手を進めた時、先手が勝つ確率
 double playOut(Board b) {
@@ -475,7 +738,7 @@ void second() {
 }
 void test() {
     Board b;
-    cout << "first:MCTS second:Montecarlo" << endl;
+    cout << "first:MCTS second:greedy" << endl;
     while (true) {
         if (b.isTerminal()) {
             b.finish();
@@ -487,7 +750,7 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = Montecarlo(b);
+                b = greedy(b);
         }
 
         while (true) {
@@ -502,12 +765,15 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = Montecarlo(b);
+                b = greedy(b);
             break;
         }
     }
 }
 const int MATCH_NUM = 100;
+void test_rand() {
+    REP(i, 100) { cout << getrand01() << endl; }
+}
 signed main() {
     init();
     string S;

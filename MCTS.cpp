@@ -415,8 +415,8 @@ struct Board {
     //全体の評価値
     double eval() {
         // double ret = 0;
-        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 10 +
-               calc_openness() * getrand01() * 10;
+        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 100 +
+               calc_openness() * getrand01() * 30;
     }
     //ランダムに手番を進める
     void advance() {
@@ -884,7 +884,7 @@ void test() {
         }
     }
 }
-const int MATCH_NUM = 50;
+const int MATCH_NUM = 30;
 void test_rand() {
     REP(i, 100) { cout << getrand01() << endl; }
 }

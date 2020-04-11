@@ -415,8 +415,7 @@ struct Board {
     //全体の評価値
     double eval() {
         // double ret = 0;
-        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 100 +
-               calc_openness() * getrand01() * 30;
+        return calc_confirmed_stone() * 100 + calc_openness() * 60;
     }
     //ランダムに手番を進める
     void advance() {
@@ -490,7 +489,10 @@ struct Board {
     int playout_greedy() {
         Board tmp_b = *this;
         while (!tmp_b.isTerminal()) {
-            tmp_b.advance_eval();
+            if (xor64() % 20 == 0)  // 20回に1度は完全ランダム
+                tmp_b.advance();
+            else
+                tmp_b.advance_eval();
         }
         int res = tmp_b.countDisks();
         if (res > 0)

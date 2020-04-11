@@ -1,7 +1,9 @@
 #include <bits/stdc++.h>
 using namespace std;
-#define REP(i, n) for (int i = 0; i < (n); i++)
-#define FOR(i, m, n) for (int i = (m); i < (n); i++)
+#define REP8(i, n) for (int_fast8_t i = 0; i < (n); i++)
+#define FOR8(i, m, n) for (int_fast8_t i = (m); i < (n); i++)
+#define REP(i, n) for (int_fast16_t i = 0; i < (n); i++)
+#define FOR(i, m, n) for (int_fast16_t i = (m); i < (n); i++)
 using pii = pair<int, int>;
 
 const bool DEBUG = false;
@@ -9,38 +11,39 @@ const bool PLAY = true;
 const double TIME_LIMIT = 3000;
 std::random_device rd;
 std::mt19937 mt(rd());
-uint64_t getrand() {
-    uint64_t seed = time(NULL);
+
+uint_fast64_t getrand() {
+    uint_fast64_t seed = time(NULL);
     mt.seed(seed);
     return mt();
 }
 //周期2^64-1の乱数
-uint64_t xor64() {
-    static uint64_t x = getrand();
+uint_fast64_t xor64() {
+    static uint_fast64_t x = getrand();
     x = x ^ (x << 7);
     return x = x ^ (x >> 9);
 }
 
 // map<char, int> ord;
-int ord[150];
-const int dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
-const int dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
-const int BOARD_SIZE = 8;
-const int PLAYOUT_COUNT = 1000;
-uint64_t firstHash, secondHash, playerHash;
+uint_fast8_t ord[150];
+constexpr int dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
+constexpr int dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+constexpr uint_fast8_t BOARD_SIZE = 8;
+constexpr uint_fast16_t PLAYOUT_COUNT = 1000;
+uint_fast64_t firstHash, secondHash, playerHash;
 // 0->'.', 1->'B', 2->'W'
-uint64_t zobristHash[8][8][3];
+uint_fast64_t zobristHash[8][8][3];
 char disk[3] = {'B', 'W', '.'};
-unordered_map<uint64_t, pair<uint64_t, uint64_t>> hash2score;  // count,win
+unordered_map<uint_fast64_t, pair<uint_fast64_t, uint_fast64_t>> hash2score;  // count,win
 void init() {
     firstHash = xor64();
     secondHash = xor64();
     playerHash = firstHash ^ secondHash;
-    REP(i, BOARD_SIZE)
-    REP(j, BOARD_SIZE)
-    REP(k, 3) {
+    REP8(i, BOARD_SIZE)
+    REP8(j, BOARD_SIZE)
+    REP8(k, 3) {
         zobristHash[i][j][k] = xor64();
-        cout << i << " " << j << " " << k << " :" << zobristHash[i][j][k] << endl;
+        // cout << i << " " << j << " " << k << " :" << zobristHash[i][j][k] << endl;
     }
     ord['B'] = 0, ord['W'] = 1, ord['.'] = 2;
 }
@@ -58,11 +61,11 @@ struct Board {
     char board[BOARD_SIZE][BOARD_SIZE];
     bool player;
     int last_x, last_y;
-    uint64_t hash;
-    vector<uint64_t> next_states;
+    uint_fast64_t hash;
+    vector<uint_fast64_t> next_states;
     Board() {
-        REP(i, BOARD_SIZE)
-        REP(j, BOARD_SIZE)
+        REP8(i, BOARD_SIZE)
+        REP8(j, BOARD_SIZE)
         board[i][j] = '.';
         board[3][3] = 'W';
         board[3][4] = 'B';
@@ -73,8 +76,8 @@ struct Board {
         last_y = -1;
         hash = 0;
         hash ^= firstHash;
-        REP(i, BOARD_SIZE)
-        REP(j, BOARD_SIZE) {
+        REP8(i, BOARD_SIZE)
+        REP8(j, BOARD_SIZE) {
             if (board[i][j] == 'B') hash ^= zobristHash[i][j][0];
             if (board[i][j] == 'W') hash ^= zobristHash[i][j][1];
             if (board[i][j] == '.') hash ^= zobristHash[i][j][2];
@@ -82,13 +85,13 @@ struct Board {
     }
     void print() {
         cout << "  ";
-        REP(i, BOARD_SIZE)
+        REP8(i, BOARD_SIZE)
         cout << i << " ";
         cout << endl;
 
-        REP(i, BOARD_SIZE) {
+        REP8(i, BOARD_SIZE) {
             cout << i << " ";
-            REP(j, BOARD_SIZE) {
+            REP8(j, BOARD_SIZE) {
                 bool is_last = false;
                 if (i == last_x && j == last_y) is_last = true;
                 string s;
@@ -105,8 +108,8 @@ struct Board {
     //黒 - 白
     int countDisks() {
         int ret = 0;
-        REP(i, BOARD_SIZE)
-        REP(j, BOARD_SIZE) {
+        REP8(i, BOARD_SIZE)
+        REP8(j, BOARD_SIZE) {
             if (board[i][j] == 'B')
                 ret++;
             else if (board[i][j] == 'W')
@@ -117,11 +120,11 @@ struct Board {
     //(i,j)に石をおけるか
     bool canPut(int i, int j) {
         if (board[i][j] != '.') return false;
-        REP(dir, 8) {
+        REP8(dir, 8) {
             int nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
-            REP(k, BOARD_SIZE) {
+            REP8(k, BOARD_SIZE) {
                 nx += dx[dir], ny += dy[dir];
                 if (!isInside(nx, ny)) break;
                 if (board[nx][ny] == '.') break;  //空きマスでもアウト
@@ -132,7 +135,7 @@ struct Board {
     }
     // player_が石をおけるか
     bool canMove(bool player_) {
-        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+        REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
             if (canPut(i, j)) return true;
         }
         return false;
@@ -141,13 +144,13 @@ struct Board {
     bool isTerminal() { return !canMove(0) && !canMove(1); }
 
     //現在の盤面のハッシュ値を返す
-    uint64_t calcHash() {
-        uint64_t ret = 0;
+    uint_fast64_t calcHash() {
+        uint_fast64_t ret = 0;
         if (player == 0)
             ret ^= firstHash;
         else
             ret ^= secondHash;
-        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) { ret ^= zobristHash[i][j][ord[board[i][j]]]; }
+        REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) { ret ^= zobristHash[i][j][ord[board[i][j]]]; }
         return ret;
     }
     //(i,j)に石を置いて手番を渡す
@@ -161,11 +164,11 @@ struct Board {
         board[i][j] = disk[player];
         // cout << "ord[" << player << "]:" << ord[player] << endl;
         hash ^= zobristHash[i][j][player];
-        REP(dir, 8) {
+        REP8(dir, 8) {
             int nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
-            REP(k, BOARD_SIZE) {
+            REP8(k, BOARD_SIZE) {
                 nx += dx[dir], ny += dy[dir];
                 if (!isInside(nx, ny)) break;     //はみ出たらアウト
                 if (board[nx][ny] == '.') break;  //空きマスでもアウト
@@ -208,7 +211,7 @@ struct Board {
             return;
         }
         vector<pii> cells;
-        REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+        REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
             if (board[i][j] != '.') continue;
             if (canPut(i, j)) {
                 cells.push_back({i, j});
@@ -269,16 +272,16 @@ Board MCTS(Board b) {
     }
     clock_t start_t = clock();
     //ハッシュ値→盤面
-    unordered_map<uint64_t, Board> hash2board;
-    unordered_map<uint64_t, vector<uint64_t>> G;
-    unordered_map<uint64_t, int> visited_count;
-    unordered_map<uint64_t, int> win_count;  //勝ち:+1 負け:-1
+    unordered_map<uint_fast64_t, Board> hash2board;
+    unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
+    unordered_map<uint_fast64_t, int> visited_count;
+    unordered_map<uint_fast64_t, int> win_count;  //勝ち:+1 負け:-1
     // b.hash = b.calcHash();
-    uint64_t root_h = b.hash;
+    uint_fast64_t root_h = b.hash;
     hash2board[root_h] = b;
     int t = 0;
     int update_cnt = 0;
-    REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+    REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
         if (b.canPut(i, j)) {
             Board next_b = b;
             next_b.put(i, j);
@@ -295,14 +298,14 @@ Board MCTS(Board b) {
     //制限時間までくりかえす
 
     while (static_cast<double>(clock() - start_t) / CLOCKS_PER_SEC * 1000.0 < TIME_LIMIT) {
-        vector<uint64_t> path;
-        uint64_t pos_h = root_h;
+        vector<uint_fast64_t> path;
+        uint_fast64_t pos_h = root_h;
         path.push_back(pos_h);
         while (true) {
             int N = visited_count[root_h];
             if (G[pos_h].size() == 0) break;
             double max_score = -1e9;
-            uint64_t argmax_h = 0;
+            uint_fast64_t argmax_h = 0;
             for (auto next_h : G[pos_h]) {
                 double score = uct_score(win_count[next_h], visited_count[next_h], N, b.player);
                 if (score > max_score) {
@@ -316,7 +319,7 @@ Board MCTS(Board b) {
         //葉ノードへの訪問回数が閾値を超えているならば、すべての遷移先(合法手)から一度ずつプレイアウトを行う
         if (visited_count[pos_h] > threshold_vis) {
             Board leaf_b = hash2board[pos_h];
-            REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+            REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
                 if (leaf_b.canPut(i, j)) {
                     Board next_b = leaf_b;
                     next_b.put(i, j);
@@ -344,7 +347,7 @@ Board MCTS(Board b) {
         }
     }
     int max_vis = 0;
-    uint64_t next_h = 0;
+    uint_fast64_t next_h = 0;
     for (auto h : G[root_h]) {
         cout << "visited count:" << visited_count[h] << endl;
         cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
@@ -369,7 +372,7 @@ Board Montecarlo(Board b) {
     double exp = (b.player == 0) ? -2 : 2;
 
     Board ret_b;
-    REP(i, BOARD_SIZE) REP(j, BOARD_SIZE) {
+    REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
         if (!b.canPut(i, j)) continue;
         Board tmp_b = b;
         tmp_b.put(i, j);

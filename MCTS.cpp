@@ -7,9 +7,9 @@ using namespace std;
 #define isInside(x, y) ((x) >= 0 && (x) < 8 && (y) >= 0 && (y) < 8)
 using pii = pair<int, int>;
 
-const bool DEBUG = true;
-const bool PLAY = true;
-const double TIME_LIMIT = 3000;
+bool DEBUG = true;
+bool PLAY = true;
+constexpr double TIME_LIMIT = 500;
 std::random_device rd;
 std::mt19937 mt(rd());
 
@@ -527,7 +527,7 @@ double uct_score(int win_count, int visited_count, int N, char player) {
     double bias = sqrt(2 * log(N) / visited_count);
     return win_rate + bias;
 }
-const int threshold_vis = 1000;
+const int threshold_vis = 50;
 //モンテカルロ木探索
 Board MCTS(Board b) {
     if (!b.canMove(b.player)) {
@@ -711,8 +711,11 @@ Board MCTS_eval(Board b) {
     int max_vis = 0;
     uint_fast64_t next_h = 0;
     for (auto h : G[root_h]) {
-        cout << "visited count:" << visited_count[h] << endl;
-        cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
+        if (DEBUG) {
+            cout << "visited count:" << visited_count[h] << endl;
+            cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
+        }
+
         if (visited_count[h] > max_vis) {
             max_vis = visited_count[h];
             next_h = h;
@@ -811,7 +814,7 @@ void first() {
                 continue;
             }
         }
-        b = MCTS(b);
+        b = MCTS_eval(b);
     }
 }
 void second() {
@@ -821,7 +824,7 @@ void second() {
             b.finish();
             return;
         }
-        b = MCTS(b);
+        b = MCTS_eval(b);
         while (true) {
             if (b.isTerminal()) {
                 b.finish();
@@ -881,9 +884,58 @@ void test() {
         }
     }
 }
-const int MATCH_NUM = 100;
+const int MATCH_NUM = 50;
 void test_rand() {
     REP(i, 100) { cout << getrand01() << endl; }
+}
+void batch_test() {
+    PLAY = false;
+    DEBUG = false;
+    int win_c = 0;
+    int lose_c = 0;
+    REP(_, MATCH_NUM) {
+        Board b;
+        cout << "first:MCTS with greedy second:Montecarlo" << endl;
+        while (true) {
+            if (b.isTerminal()) {
+                b.finish();
+                break;
+            }
+            if (!b.canMove(b.player))
+                b.pass();
+            else {
+                if (b.player == 0)
+                    b = MCTS_eval(b);
+                else
+                    b = Montecarlo(b);
+            }
+
+            while (true) {
+                if (b.isTerminal()) {
+                    b.finish();
+                    break;
+                }
+                if (!b.canMove(b.player)) {
+                    b.pass();
+                    break;
+                }
+                if (b.player == 0)
+                    b = MCTS_eval(b);
+                else
+                    b = Montecarlo(b);
+                break;
+            }
+        }
+        int ret = b.countDisks();
+        b.print();
+        if (ret > 0)
+            win_c++;
+        else if (ret < 0)
+            lose_c++;
+    }
+
+    cout << "win:" << win_c << endl;
+    cout << "lose:" << lose_c << endl;
 }
 signed main() {
     init();
@@ -894,6 +946,8 @@ signed main() {
         first();
     else if (S == "second")
         second();
-    else
+    else if (S == "test")
         test();
+    else
+        batch_test();
 }

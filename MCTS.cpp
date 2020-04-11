@@ -259,8 +259,8 @@ const double C = 1.41421;
 double uct_score(int win_count, int visited_count, int N, char player) {
     assert(N > 0);
     double win_rate = (double)win_count / visited_count;
-    if (player == 'W') win_rate *= -1;
-    double bias = C * sqrt(log(N) / visited_count);
+    if (player == 1) win_rate *= -1;
+    double bias = sqrt(2 * log(N) / visited_count);
     return win_rate + bias;
 }
 const int threshold_vis = 1000;

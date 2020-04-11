@@ -9,7 +9,7 @@ using pii = pair<int, int>;
 
 bool DEBUG = true;
 bool PLAY = true;
-constexpr double TIME_LIMIT = 500;
+double TIME_LIMIT = 500;
 std::random_device rd;
 std::mt19937 mt(rd());
 
@@ -27,9 +27,9 @@ uint_fast64_t xor64() {
 double getrand01() { return (double)xor64() / ULLONG_MAX; }
 
 // map<char, int> ord;
-uint_fast8_t ord[150];
-constexpr int dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
-constexpr int dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+int_fast8_t ord[150];
+constexpr int_fast8_t dx[8] = {1, 1, 0, -1, -1, -1, 0, 1};
+constexpr int_fast8_t dy[8] = {0, 1, 1, 1, 0, -1, -1, -1};
 constexpr int_fast16_t BOARD_SCORE[8][8] = {
     {100, -40, 20, 5, 5, 20, -40, 100},    //
     {-40, -80, -1, -1, -1, -1, -80, -40},  //
@@ -40,8 +40,8 @@ constexpr int_fast16_t BOARD_SCORE[8][8] = {
     {-40, -80, -1, -1, -1, -1, -80, -40},  //
     {100, -40, 20, 5, 5, 20, -40, 100}     //
 };
-constexpr uint_fast8_t BOARD_SIZE = 8;
-constexpr uint_fast16_t PLAYOUT_COUNT = 1000;
+constexpr int_fast8_t BOARD_SIZE = 8;
+constexpr int_fast16_t PLAYOUT_COUNT = 1000;
 uint_fast64_t firstHash, secondHash, playerHash;
 // 0->'.', 1->'B', 2->'W'
 uint_fast64_t zobristHash[8][8][3];
@@ -72,7 +72,9 @@ void print(string S) { cout << S << endl; }
 struct Board {
     char board[BOARD_SIZE][BOARD_SIZE];
     bool player;
-    int last_x, last_y;
+    int_fast8_t last_x, last_y;
+    int_fast8_t depth;
+    // Board *pre;
     uint_fast64_t hash;
     vector<uint_fast64_t> next_states;
     Board() {
@@ -87,6 +89,7 @@ struct Board {
         last_x = -1;
         last_y = -1;
         hash = 0;
+        depth = 0;
         hash ^= firstHash;
         REP8(i, BOARD_SIZE)
         REP8(j, BOARD_SIZE) {
@@ -95,6 +98,7 @@ struct Board {
             if (board[i][j] == '.') hash ^= zobristHash[i][j][2];
         }
     }
+    // void undo() { this = *this->pre; }
     void print() {
         cout << "  ";
         REP8(i, BOARD_SIZE)
@@ -118,8 +122,8 @@ struct Board {
         cout << endl;
     }
     //黒 - 白
-    int countDisks() {
-        int ret = 0;
+    int_fast8_t countDisks() {
+        int_fast8_t ret = 0;
         REP8(i, BOARD_SIZE)
         REP8(j, BOARD_SIZE) {
             if (board[i][j] == 'B')
@@ -133,7 +137,7 @@ struct Board {
     bool canPut(int i, int j) {
         if (board[i][j] != '.') return false;
         REP8(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
+            int_fast8_t nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
             REP8(k, BOARD_SIZE) {
@@ -149,7 +153,7 @@ struct Board {
     bool canPut(int i, int j, bool player_) {
         if (board[i][j] != '.') return false;
         REP8(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
+            int_fast8_t nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player_]) continue;
             REP8(k, BOARD_SIZE) {
@@ -183,7 +187,7 @@ struct Board {
     }
     //(i,j)に石を置いて手番を渡す
 
-    void put(int i, int j) {
+    void put(int_fast8_t i, int_fast8_t j) {
         // if (DEBUG) {
         //     cout << "put " << player << " on (" << i << "," << j << ")" << endl;
         //     // cout << board[i][j] << endl;
@@ -193,7 +197,7 @@ struct Board {
         // cout << "ord[" << player << "]:" << ord[player] << endl;
         hash ^= zobristHash[i][j][player];
         REP8(dir, 8) {
-            int nx = i + dx[dir], ny = j + dy[dir];
+            int_fast8_t nx = i + dx[dir], ny = j + dy[dir];
             if (!isInside(nx, ny)) continue;
             if (board[nx][ny] != disk[!player]) continue;
             REP8(k, BOARD_SIZE) {
@@ -203,7 +207,7 @@ struct Board {
 
                 // i,jからnx,nyまで全部ひっくり返す
                 if (board[nx][ny] == disk[player]) {
-                    int x = i + dx[dir], y = j + dy[dir];
+                    int_fast8_t x = i + dx[dir], y = j + dy[dir];
                     while (x != nx || y != ny) {
                         hash ^= zobristHash[x][y][ord[board[x][y]]];
                         board[x][y] = disk[player];  //ひっくり返す
@@ -219,11 +223,13 @@ struct Board {
         last_y = j;
         player = !player;
         hash ^= playerHash;
+        depth++;
         // hash = calcHash();
     }
     void pass() {
         player = !player;
         hash ^= playerHash;
+        depth++;
         // hash = calcHash();
     }
     //黒の確定石の数-白の確定石
@@ -415,7 +421,8 @@ struct Board {
     //全体の評価値
     double eval() {
         // double ret = 0;
-        return calc_confirmed_stone() * 100 + calc_openness() * 60;
+        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 100 +
+               calc_openness() * getrand01() * 30;
     }
     //ランダムに手番を進める
     void advance() {
@@ -436,9 +443,9 @@ struct Board {
                 cells.push_back({i, j});
             }
         }
-        int c_nxt = cells.size();
+        int_fast8_t c_nxt = cells.size();
         assert(c_nxt > 0);
-        int idx = xor64() % c_nxt;
+        int_fast8_t idx = xor64() % c_nxt;
         put(cells[idx].first, cells[idx].second);
     }
     //評価値がもっとも高い手を選んで進める
@@ -468,17 +475,17 @@ struct Board {
         if (player == 1) {
             put(cells[0].second.first, cells[0].second.second);
         } else {
-            int n = cells.size();
+            int_fast8_t n = cells.size();
             put(cells[n - 1].second.first, cells[n - 1].second.second);
         }
     }
     //一回プレイアウト
-    int playout() {
+    int_fast8_t playout() {
         Board tmp_b = *this;
         while (!tmp_b.isTerminal()) {
             tmp_b.advance();
         }
-        int res = tmp_b.countDisks();
+        int_fast8_t res = tmp_b.countDisks();
         if (res > 0)
             return 1;
         else if (res == 0)
@@ -486,15 +493,12 @@ struct Board {
         else
             return -1;
     }
-    int playout_greedy() {
+    int_fast8_t playout_greedy() {
         Board tmp_b = *this;
         while (!tmp_b.isTerminal()) {
-            if (xor64() % 20 == 0)  // 20回に1度は完全ランダム
-                tmp_b.advance();
-            else
-                tmp_b.advance_eval();
+            tmp_b.advance_eval();
         }
-        int res = tmp_b.countDisks();
+        int_fast8_t res = tmp_b.countDisks();
         if (res > 0)
             return 1;
         else if (res == 0)
@@ -529,7 +533,7 @@ double uct_score(int win_count, int visited_count, int N, char player) {
     double bias = sqrt(2 * log(N) / visited_count);
     return win_rate + bias;
 }
-const int threshold_vis = 50;
+int threshold_vis = 50;
 //モンテカルロ木探索
 Board MCTS(Board b) {
     if (!b.canMove(b.player)) {
@@ -634,6 +638,19 @@ Board MCTS_eval(Board b) {
         b.pass();
         return b;
     }
+    if (b.depth >= 34) {
+        TIME_LIMIT = 2000;
+        threshold_vis = 500;
+    } else if (b.depth >= 50) {
+        TIME_LIMIT = 1000;
+        threshold_vis = 200;
+    } else if (b.depth < 10) {
+        TIME_LIMIT = 2000;
+        threshold_vis = 300;
+    } else {
+        threshold_vis = 1500;
+        TIME_LIMIT = 8000;
+    }
     clock_t start_t = clock();
     //ハッシュ値→盤面
     unordered_map<uint_fast64_t, Board> hash2board;
@@ -643,14 +660,14 @@ Board MCTS_eval(Board b) {
     // b.hash = b.calcHash();
     uint_fast64_t root_h = b.hash;
     hash2board[root_h] = b;
-    int t = 0;
-    int update_cnt = 0;
+    int_fast16_t t = 0;
+    int_fast16_t update_cnt = 0;
     REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
         if (b.canPut(i, j)) {
             Board next_b = b;
             next_b.put(i, j);
             hash2board[next_b.hash] = next_b;
-            int res = next_b.playout_greedy();
+            int_fast8_t res = next_b.playout_greedy();
             t++;
             update_cnt++;
             G[root_h].push_back(next_b.hash);
@@ -666,7 +683,7 @@ Board MCTS_eval(Board b) {
         uint_fast64_t pos_h = root_h;
         path.push_back(pos_h);
         while (true) {
-            int N = visited_count[root_h];
+            int_fast16_t N = visited_count[root_h];
             if (G[pos_h].size() == 0) break;
             double max_score = -1e9;
             uint_fast64_t argmax_h = 0;
@@ -688,7 +705,7 @@ Board MCTS_eval(Board b) {
                     Board next_b = leaf_b;
                     next_b.put(i, j);
                     hash2board[next_b.hash] = next_b;
-                    int res = next_b.playout_greedy();
+                    int_fast8_t res = next_b.playout_greedy();
                     t++;
                     // t++;
                     G[pos_h].push_back(next_b.hash);
@@ -700,7 +717,7 @@ Board MCTS_eval(Board b) {
         //そうでなければ、葉ノードから1回プレイアウトを行ってパス上のすべてのノードのスコアを更新する
         else {
             Board leaf_b = hash2board[pos_h];
-            int res = leaf_b.playout_greedy();
+            int_fast8_t res = leaf_b.playout_greedy();
             t++;
             update_cnt++;
             // path.push_back(pos_h);
@@ -710,7 +727,7 @@ Board MCTS_eval(Board b) {
             }
         }
     }
-    int max_vis = 0;
+    int_fast16_t max_vis = 0;
     uint_fast64_t next_h = 0;
     for (auto h : G[root_h]) {
         if (DEBUG) {
@@ -724,6 +741,7 @@ Board MCTS_eval(Board b) {
         }
     }
     Board ret = hash2board[next_h];
+    // ret.pre = &b;
     cout << "number of updates:" << update_cnt << endl;
     cout << "number of playouts" << t << endl;
     if (PLAY) ret.print();
@@ -804,6 +822,7 @@ void first() {
             }
             cout << "input: ";
             string S;
+
             getline(cin, S);
             if (S.size() == 3 && ('0' <= S[0] && S[0] <= '9') && ('0' <= S[2] && S[2] <= '9')) {
                 int x = S[0] - '0', y = S[2] - '0';

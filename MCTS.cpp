@@ -8,7 +8,8 @@ using namespace std;
 using pii = pair<int, int>;
 
 bool DEBUG = true;
-bool PLAY = true;
+bool PLAY = false;
+bool TEST = true;
 double TIME_LIMIT = 500;
 std::random_device rd;
 std::mt19937 mt(rd());
@@ -421,9 +422,22 @@ struct Board {
     //全体の評価値
     double eval() {
         // double ret = 0;
-        return board_score() * getrand01() + calc_confirmed_stone() * getrand01() * 100 +
-               calc_openness() * getrand01() * 30;
+        double BS = 1;
+        if (this->depth < 20) BS *= 3;
+        return board_score() * BS * getrand01() + calc_confirmed_stone() * getrand01() * 80 +
+               calc_openness() * getrand01() * 40;
     }
+    int_fast16_t eval_fixed() {
+        double BS = 1;
+        if (this->depth < 20) BS *= 3;
+        // if (DEBUG) {
+        //     cout << "board score:" << board_score() * BS << endl;
+        //     cout << "comfirmed score:" << calc_confirmed_stone() * 80 << endl;
+        //     cout << "openness:" << calc_openness() * 40 << endl;
+        // }
+        return board_score() * BS + calc_confirmed_stone() * 80 + calc_openness() * 40;
+    }
+    int_fast16_t eval_terminated() { return countDisks() * 100; }
     //ランダムに手番を進める
     void advance() {
         if (isTerminal()) return;
@@ -496,6 +510,9 @@ struct Board {
     int_fast8_t playout_greedy() {
         Board tmp_b = *this;
         while (!tmp_b.isTerminal()) {
+            // if (xor64() % 20 == 0)
+            //     tmp_b.advance();
+            // else
             tmp_b.advance_eval();
         }
         int_fast8_t res = tmp_b.countDisks();
@@ -524,9 +541,14 @@ Board Montecarlo(Board b);
 double playOut(Board b);
 int move(Board b);
 void init();
+int_fast16_t get_min(Board &b, int_fast8_t depth, int_fast16_t par_max);
+int_fast16_t get_max(Board &b, int_fast8_t depth, int_fast16_t par_min);
 /*----------prototype declaration----------*/
 const double C = 1.41421;
-double uct_score(int win_count, int visited_count, int N, char player) {
+double uct_score(int_fast32_t win_count, int_fast32_t visited_count, int_fast32_t N, char player) {
+    if (N <= 0) {
+        cerr << "N:" << N << endl;
+    }
     assert(N > 0);
     double win_rate = (double)win_count / visited_count;
     if (player == 1) win_rate *= -1;
@@ -638,6 +660,19 @@ Board MCTS_eval(Board b) {
         b.pass();
         return b;
     }
+    // if (b.depth < 10) {
+    //     TIME_LIMIT = 500;
+    //     threshold_vis = 70;
+    // } else if (b.depth < 34) {
+    //     TIME_LIMIT = 1000;
+    //     threshold_vis = 200;
+    // } else if (b.depth < 50) {
+    //     TIME_LIMIT = 800;
+    //     threshold_vis = 100;
+    // } else {
+    //     TIME_LIMIT = 500;
+    //     threshold_vis = 70;
+    // }
     if (b.depth >= 34) {
         TIME_LIMIT = 2000;
         threshold_vis = 500;
@@ -655,6 +690,109 @@ Board MCTS_eval(Board b) {
     //ハッシュ値→盤面
     unordered_map<uint_fast64_t, Board> hash2board;
     unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
+    unordered_map<uint_fast64_t, int_fast32_t> visited_count;
+    unordered_map<uint_fast64_t, int_fast32_t> win_count;  //勝ち:+1 負け:-1
+    // b.hash = b.calcHash();
+    uint_fast64_t root_h = b.hash;
+    hash2board[root_h] = b;
+    visited_count[root_h]++;
+    int_fast32_t t = 0;
+    int_fast32_t update_cnt = 0;
+    REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
+        if (b.canPut(i, j)) {
+            Board next_b = b;
+            next_b.put(i, j);
+            hash2board[next_b.hash] = next_b;
+            int_fast8_t res = next_b.playout_greedy();
+            t++;
+            update_cnt++;
+            G[root_h].push_back(next_b.hash);
+            visited_count[next_b.hash]++;
+            visited_count[root_h]++;
+            if (res == 1) win_count[next_b.hash] += res;
+        }
+    }
+    //制限時間までくりかえす
+
+    while (static_cast<double>(clock() - start_t) / CLOCKS_PER_SEC * 1000.0 < TIME_LIMIT) {
+        vector<uint_fast64_t> path;
+        uint_fast64_t pos_h = root_h;
+        path.push_back(pos_h);
+        while (true) {
+            int_fast32_t N = visited_count[root_h];
+            if (G[pos_h].size() == 0) break;
+            double max_score = -1e9;
+            uint_fast64_t argmax_h = 0;
+            for (auto next_h : G[pos_h]) {
+                double score = uct_score(win_count[next_h], visited_count[next_h], N, b.player);
+                if (score > max_score) {
+                    max_score = score;
+                    argmax_h = next_h;
+                }
+            }
+            path.push_back(argmax_h);
+            pos_h = argmax_h;
+        }
+        //葉ノードへの訪問回数が閾値を超えているならば、すべての遷移先(合法手)から一度ずつプレイアウトを行う
+        if (visited_count[pos_h] > threshold_vis) {
+            Board leaf_b = hash2board[pos_h];
+            REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
+                if (leaf_b.canPut(i, j)) {
+                    Board next_b = leaf_b;
+                    next_b.put(i, j);
+                    hash2board[next_b.hash] = next_b;
+                    int_fast8_t res = next_b.playout_greedy();
+                    t++;
+                    // t++;
+                    G[pos_h].push_back(next_b.hash);
+                    visited_count[next_b.hash]++;
+                    if (res == 1) win_count[next_b.hash] += res;
+                }
+            }
+        }
+        //そうでなければ、葉ノードから1回プレイアウトを行ってパス上のすべてのノードのスコアを更新する
+        else {
+            Board leaf_b = hash2board[pos_h];
+            int_fast8_t res = leaf_b.playout_greedy();
+            t++;
+            update_cnt++;
+            // path.push_back(pos_h);
+            for (auto h : path) {
+                visited_count[h]++;
+                if (res == 1) win_count[h] += res;
+            }
+        }
+    }
+    int_fast16_t max_vis = 0;
+    uint_fast64_t next_h = 0;
+    for (auto h : G[root_h]) {
+        if (DEBUG) {
+            cout << "visited count:" << visited_count[h] << endl;
+            cout << "winning rate:" << (double)win_count[h] / visited_count[h] << endl;
+        }
+
+        if (visited_count[h] > max_vis) {
+            max_vis = visited_count[h];
+            next_h = h;
+        }
+    }
+    Board ret = hash2board[next_h];
+    // ret.pre = &b;
+    cout << "number of updates:" << update_cnt << endl;
+    cout << "number of playouts" << t << endl;
+    if (PLAY) ret.print();
+    return ret;
+}
+
+Board MCTS_test(Board b) {
+    if (!b.canMove(b.player)) {
+        b.pass();
+        return b;
+    }
+    clock_t start_t = clock();
+    //ハッシュ値→盤面
+    unordered_map<uint_fast64_t, Board> hash2board;
+    unordered_map<uint_fast64_t, vector<uint_fast64_t>> G;
     unordered_map<uint_fast64_t, int> visited_count;
     unordered_map<uint_fast64_t, int> win_count;  //勝ち:+1 負け:-1
     // b.hash = b.calcHash();
@@ -662,6 +800,7 @@ Board MCTS_eval(Board b) {
     hash2board[root_h] = b;
     int_fast16_t t = 0;
     int_fast16_t update_cnt = 0;
+    visited_count[root_h]++;
     REP8(i, BOARD_SIZE) REP8(j, BOARD_SIZE) {
         if (b.canPut(i, j)) {
             Board next_b = b;
@@ -747,6 +886,7 @@ Board MCTS_eval(Board b) {
     if (PLAY) ret.print();
     return ret;
 }
+
 Board Montecarlo(Board b) {
     if (!b.canMove(b.player)) {
         b.pass();
@@ -785,6 +925,149 @@ Board greedy(Board b) {
     }
     return b;
 }
+Board Minimax(Board b) {
+    int_fast16_t depth = 0;
+    if (b.depth < 10)
+        depth = 5;
+    else if (b.depth < 25)
+        depth = 7;
+    else if (b.depth < 48)
+        depth = 9;
+    else
+        depth = 12;
+    if (!b.canMove(b.player)) {
+        b.pass();
+        return b;
+    }
+    assert(!b.isTerminal());
+    if (b.player == 0) {
+        int_fast16_t mx = -30000;
+        Board ans;
+        REP(i, 8) REP(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                int_fast16_t res = get_min(next_b, depth - 1, mx);
+                if (res > mx) {
+                    mx = res;
+                    ans = next_b;
+                }
+            }
+        }
+        if (DEBUG) {
+            cout << "max:" << mx << endl;
+        }
+        if (DEBUG) {
+            if (mx == 20000)
+                cout << "first player will win" << endl;
+            else if (mx == -20000)
+                cout << "second player will win" << endl;
+        }
+
+        if (PLAY) ans.print();
+        return ans;
+    } else {
+        int_fast16_t mn = 30000;
+        Board ans;
+        REP(i, 8) REP(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                int_fast16_t res = get_max(next_b, depth - 1, mn);
+                if (res < mn) {
+                    mn = res;
+                    ans = next_b;
+                }
+            }
+        }
+        if (DEBUG) {
+            cout << "min:" << mn << endl;
+        }
+        if (DEBUG) {
+            if (mn == 20000)
+                cout << "first player will win" << endl;
+            else if (mn == -20000)
+                cout << "second player will win" << endl;
+        }
+        if (PLAY) ans.print();
+        return ans;
+    }
+}
+int_fast16_t get_min(Board &b, int_fast8_t depth, int_fast16_t par_max) {
+    // if (DEBUG) cout << "depth:" << (int)depth << endl;
+    if (depth == 0) {
+        int_fast16_t res = b.eval_fixed();
+        if (DEBUG) {
+            // b.print();
+            // cout << "fixed value:" << res << endl;
+        }
+        return res;
+    }
+    if (b.isTerminal()) {
+        // cout << "terminated!" << endl;
+        int_fast16_t res = b.eval_terminated();
+        if (res < 0)
+            return -20000;
+        else if (res > 0)
+            return 20000;
+        else
+            return 0;
+    }
+    int_fast16_t ret = 20000;
+    if (!b.canMove(b.player)) {
+        Board next_b = b;
+        b.pass();
+        return get_max(next_b, depth - 1, ret);
+    }
+    // vector<double, Board *> v;
+    REP8(i, 8) REP8(j, 8) {
+        if (b.canPut(i, j)) {
+            Board next_b = b;
+            next_b.put(i, j);
+            ret = min(ret, get_max(next_b, depth - 1, ret));
+            if (ret <= par_max) return ret;
+        }
+    }
+    return ret;
+}
+int_fast16_t get_max(Board &b, int_fast8_t depth, int_fast16_t par_min) {
+    // if (DEBUG) cout << "depth:" << (int)depth << endl;
+    if (depth == 0) {
+        if (DEBUG) {
+            int_fast16_t res = b.eval_fixed();
+            // if (DEBUG) {
+            //     b.print();
+            //     cout << "fixed value:" << res << endl;
+            // }
+            return res;
+        }
+        return b.eval_fixed();
+    }
+    if (b.isTerminal()) {
+        int_fast16_t res = b.eval_terminated();
+        if (res < 0)
+            return -20000;
+        else if (res > 0)
+            return 20000;
+        else
+            return 0;
+    }
+    int_fast16_t ret = -20000;
+    if (!b.canMove(b.player)) {
+        Board next_b = b;
+        b.pass();
+        return get_min(next_b, depth - 1, ret);
+    }
+    REP8(i, 8) REP8(j, 8) {
+        if (b.canPut(i, j)) {
+            Board next_b = b;
+            next_b.put(i, j);
+            ret = max(ret, get_min(next_b, depth - 1, ret));
+            if (ret >= par_min) return ret;
+        }
+    }
+    return ret;
+}
 
 //盤面bからはじめてランダムに手を進めた時、先手が勝つ確率
 double playOut(Board b) {
@@ -804,6 +1087,8 @@ double playOut(Board b) {
 }
 
 void first() {
+    DEBUG = true;
+    PLAY = true;
     Board b;
     b.print();
     while (true) {
@@ -835,17 +1120,19 @@ void first() {
                 continue;
             }
         }
-        b = MCTS_eval(b);
+        b = Minimax(b);
     }
 }
 void second() {
     Board b;
+    DEBUG = true;
+    PLAY = true;
     while (true) {
         if (b.isTerminal()) {
             b.finish();
             return;
         }
-        b = MCTS_eval(b);
+        b = Minimax(b);
         while (true) {
             if (b.isTerminal()) {
                 b.finish();
@@ -885,7 +1172,7 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = MCTS_eval(b);
+                b = MCTS_test(b);
         }
 
         while (true) {
@@ -900,23 +1187,23 @@ void test() {
             if (b.player == 0)
                 b = MCTS(b);
             else
-                b = MCTS_eval(b);
+                b = MCTS_test(b);
             break;
         }
     }
 }
-const int MATCH_NUM = 30;
+const int MATCH_NUM = 10;
 void test_rand() {
     REP(i, 100) { cout << getrand01() << endl; }
 }
 void batch_test() {
-    PLAY = false;
-    DEBUG = false;
+    PLAY = true;
+    DEBUG = true;
     int win_c = 0;
     int lose_c = 0;
     REP(_, MATCH_NUM) {
         Board b;
-        cout << "first:MCTS with greedy second:Montecarlo" << endl;
+        cout << "first:Minimax second:MCTS" << endl;
         while (true) {
             if (b.isTerminal()) {
                 b.finish();
@@ -925,10 +1212,10 @@ void batch_test() {
             if (!b.canMove(b.player))
                 b.pass();
             else {
-                if (b.player == 0)
+                if (b.player == 0) {
+                    b = Minimax(b);
+                } else
                     b = MCTS_eval(b);
-                else
-                    b = Montecarlo(b);
             }
 
             while (true) {
@@ -940,10 +1227,10 @@ void batch_test() {
                     b.pass();
                     break;
                 }
-                if (b.player == 0)
+                if (b.player == 0) {
+                    b = Minimax(b);
+                } else
                     b = MCTS_eval(b);
-                else
-                    b = Montecarlo(b);
                 break;
             }
         }

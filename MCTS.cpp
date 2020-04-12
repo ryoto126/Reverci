@@ -5,7 +5,7 @@ using namespace std;
 #define REP(i, n) for (int_fast16_t i = 0; i < (n); i++)
 #define FOR(i, m, n) for (int_fast16_t i = (m); i < (n); i++)
 #define isInside(x, y) ((x) >= 0 && (x) < 8 && (y) >= 0 && (y) < 8)
-using pii = pair<int, int>;
+using pii = pair<int_fast8_t, int_fast8_t>;
 
 bool DEBUG = true;
 bool PLAY = false;
@@ -1019,13 +1019,31 @@ int_fast16_t get_min(Board &b, int_fast8_t depth, int_fast16_t par_max) {
         b.pass();
         return get_max(next_b, depth - 1, ret);
     }
-    // vector<double, Board *> v;
-    REP8(i, 8) REP8(j, 8) {
-        if (b.canPut(i, j)) {
+    if (depth >= 5) {
+        vector<pair<double, pii>> v;
+        REP8(i, 8) REP8(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                double res = next_b.eval_fixed();
+                v.push_back({res, {i, j}});
+            }
+        }
+        sort(v.begin(), v.end());
+        for (auto &p : v) {
             Board next_b = b;
-            next_b.put(i, j);
+            next_b.put(p.second.first, p.second.second);
             ret = min(ret, get_max(next_b, depth - 1, ret));
             if (ret <= par_max) return ret;
+        }
+    } else {
+        REP8(i, 8) REP8(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                ret = min(ret, get_max(next_b, depth - 1, ret));
+                if (ret <= par_max) return ret;
+            }
         }
     }
     return ret;
@@ -1058,14 +1076,35 @@ int_fast16_t get_max(Board &b, int_fast8_t depth, int_fast16_t par_min) {
         b.pass();
         return get_min(next_b, depth - 1, ret);
     }
-    REP8(i, 8) REP8(j, 8) {
-        if (b.canPut(i, j)) {
+
+    if (depth >= 5) {
+        vector<pair<double, pii>> v;
+        REP8(i, 8) REP8(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                double res = next_b.eval_fixed();
+                v.push_back({res, {i, j}});
+            }
+        }
+        sort(v.rbegin(), v.rend());
+        for (auto &p : v) {
             Board next_b = b;
-            next_b.put(i, j);
+            next_b.put(p.second.first, p.second.second);
             ret = max(ret, get_min(next_b, depth - 1, ret));
             if (ret >= par_min) return ret;
         }
+    } else {
+        REP8(i, 8) REP8(j, 8) {
+            if (b.canPut(i, j)) {
+                Board next_b = b;
+                next_b.put(i, j);
+                ret = max(ret, get_min(next_b, depth - 1, ret));
+                if (ret >= par_min) return ret;
+            }
+        }
     }
+
     return ret;
 }
 
